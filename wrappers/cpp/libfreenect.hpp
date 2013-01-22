@@ -29,7 +29,9 @@
 #include <libfreenect.h>
 #include <stdexcept>
 #include <map>
+#include <sstream>
 #include <pthread.h>
+#include <libusb-1.0/libusb.h>
 
 namespace Freenect {
 	class Noncopyable {
@@ -209,7 +211,21 @@ namespace Freenect {
 		// Do not call directly, thread runs here
 		void operator()() {
 			while(!m_stop) {
-				if(freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
+				//if(freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
+				int res = freenect_process_events(m_ctx);
+				if (res < 0)
+				{
+					// libusb signals an error has occurred
+					if (res == LIBUSB_ERROR_INTERRUPTED)
+					{
+						// This happens sometimes, it means that a system call in libusb was interrupted somehow (perhaps due to a signal)
+						// The simple solution seems to be just ignore it.
+						continue;
+					}
+					std::stringstream ss;
+					ss << "Cannot process freenect events (libusb error code: " << res << ")";
+					throw std::runtime_error(ss.str());
+				}
 			}
 		}
 		static void *pthread_callback(void *user_data) {
